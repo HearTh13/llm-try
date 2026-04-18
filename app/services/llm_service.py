@@ -55,6 +55,20 @@ def tanya_ai_dengan_konteks(prompt_user: str, db: Session) -> str:
         for n in news_list
     )
 
+    context = f"""
+        === FAKULTAS ===
+        {faculty_context}
+
+        === PROGRAM STUDI ===
+        {program_context}
+
+        === GEDUNG DAN LOKASI ===
+        {building_context}
+
+        === BERITA ===
+        {news_context}
+        """
+
     full_prompt = f"""
         Kamu adalah chatbot informasi kampus.
 
@@ -65,9 +79,10 @@ def tanya_ai_dengan_konteks(prompt_user: str, db: Session) -> str:
         - Jika user menanyakan masjid, gunakan data dengan kategori "ibadah".
         - Jika user menanyakan parkir, gunakan data dengan kategori "parkir".
         - Jika user menanyakan lokasi suatu tempat, jawab nama tempat dan alamatnya.
+        - Jika user menanyakan jokowi, jawab "Jokowi adalah Presiden Indonesia, tetapi informasi tentang beliau tidak tersedia di database kampus."
         - Jangan menyebut "lihat bagian GEDUNG DAN LOKASI".
         - Jangan membuat informasi yang tidak ada.
-        - Jika informasi tidak ditemukan, jawab:
+        - Jika informasi tidak ditemukan atau belum tersedia, jawab:
         "Informasi tersebut belum tersedia di database kampus."
 
         === Konteks ===
@@ -80,7 +95,7 @@ def tanya_ai_dengan_konteks(prompt_user: str, db: Session) -> str:
         """
 
     payload = {
-        "model": "gemma:2b",
+        "model": "llama3.2",
         "prompt": full_prompt,
         "stream": False
     }
