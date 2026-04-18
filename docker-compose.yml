@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  # Servis Database (PostgreSQL)
+  db:
+    image: postgres:15
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: llm_chat_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # TAMBAHKAN BLOK INI:
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d llm_chat_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Servis Backend (FastAPI)
+  backend:
+    build: .
+    container_name: fastapi_app
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: on-failure
+    environment:
+      - DATABASE_URL=postgresql://postgres:root@db:5432/llm_chat_db
+
+volumes:
+  postgres_data:
