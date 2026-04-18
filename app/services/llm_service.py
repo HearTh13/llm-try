@@ -94,7 +94,7 @@ def tanya_ai_dengan_konteks(prompt_user: str, db: Session) -> str:
         """
 
     payload = {
-        "model": "gemma:2b",
+        "model": "llama3.2",
         "prompt": full_prompt,
         "stream": False
     }

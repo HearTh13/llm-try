@@ -1,6 +1,5 @@
 from langchain_ollama import ChatOllama
-from langchain.agents import initialize_agent, AgentType
-from langchain.tools import tool    
+from langchain.agents import initialize_agent, AgentType, Tool
 from sqlalchemy.orm import Session
 
 from app.models.faculty import Faculty
@@ -9,15 +8,14 @@ from app.models.building import Building
 from app.models.news import News
 
 
-def tanya_ai_dengan_konteks(prompt_user: str, db: Session) -> str:
+def tanya_ai_dengan_agent(prompt_user: str, db: Session) -> str:
     llm = ChatOllama(
         model="llama3.2",
-        base_url="http://host.docker.internal:11434"
+        base_url="http://host.docker.internal:11434",
+        temperature=0
     )
 
-    @tool
-    def cari_perpustakaan() -> str:
-        """Cari lokasi perpustakaan di kampus."""
+    def _cari_perpustakaan(_: str) -> str:
         hasil = (
             db.query(Building)
             .filter(Building.category.ilike("%perpustakaan%"))
@@ -32,9 +30,7 @@ def tanya_ai_dengan_konteks(prompt_user: str, db: Session) -> str:
             for b in hasil
         )
 
-    @tool
-    def cari_tempat_ibadah() -> str:
-        """Cari masjid atau tempat ibadah di kampus."""
+    def _cari_tempat_ibadah(_: str) -> str:
         hasil = (
             db.query(Building)
             .filter(Building.category.ilike("%ibadah%"))
@@ -49,9 +45,7 @@ def tanya_ai_dengan_konteks(prompt_user: str, db: Session) -> str:
             for b in hasil
         )
 
-    @tool
-    def cari_parkir() -> str:
-        """Cari lokasi parkir di kampus."""
+    def _cari_parkir(_: str) -> str:
         hasil = (
             db.query(Building)
             .filter(Building.category.ilike("%parkir%"))
@@ -66,9 +60,7 @@ def tanya_ai_dengan_konteks(prompt_user: str, db: Session) -> str:
             for b in hasil
         )
 
-    @tool
-    def daftar_fakultas() -> str:
-        """Menampilkan daftar fakultas kampus."""
+    def _daftar_fakultas(_: str) -> str:
         hasil = db.query(Faculty).all()
 
         if not hasil:
@@ -79,9 +71,7 @@ def tanya_ai_dengan_konteks(prompt_user: str, db: Session) -> str:
             for f in hasil
         )
 
-    @tool
-    def daftar_program_studi() -> str:
-        """Menampilkan daftar program studi kampus."""
+    def _daftar_program_studi(_: str) -> str:
         hasil = db.query(StudyProgram).all()
 
         if not hasil:
@@ -92,9 +82,7 @@ def tanya_ai_dengan_konteks(prompt_user: str, db: Session) -> str:
             for p in hasil
         )
 
-    @tool
-    def berita_terbaru() -> str:
-        """Mengambil berita terbaru kampus."""
+    def _berita_terbaru(_: str) -> str:
         hasil = (
             db.query(News)
             .order_by(News.date.desc())
@@ -111,12 +99,36 @@ def tanya_ai_dengan_konteks(prompt_user: str, db: Session) -> str:
         )
 
     tools = [
-        cari_perpustakaan,
-        cari_tempat_ibadah,
-        cari_parkir,
-        daftar_fakultas,
-        daftar_program_studi,
-        berita_terbaru,
+        Tool(
+            name="cari_perpustakaan",
+            func=_cari_perpustakaan,
+            description="Gunakan tool ini jika user menanyakan perpustakaan, library, atau lokasi membaca di kampus."
+        ),
+        Tool(
+            name="cari_tempat_ibadah",
+            func=_cari_tempat_ibadah,
+            description="Gunakan tool ini jika user menanyakan masjid, mushola, atau tempat ibadah."
+        ),
+        Tool(
+            name="cari_parkir",
+            func=_cari_parkir,
+            description="Gunakan tool ini jika user menanyakan parkiran atau lokasi parkir."
+        ),
+        Tool(
+            name="daftar_fakultas",
+            func=_daftar_fakultas,
+            description="Gunakan tool ini jika user menanyakan daftar fakultas yang tersedia."
+        ),
+        Tool(
+            name="daftar_program_studi",
+            func=_daftar_program_studi,
+            description="Gunakan tool ini jika user menanyakan program studi, jurusan, atau prodi."
+        ),
+        Tool(
+            name="berita_terbaru",
+            func=_berita_terbaru,
+            description="Gunakan tool ini jika user menanyakan berita terbaru kampus."
+        ),
     ]
 
     agent = initialize_agent(
@@ -125,24 +137,15 @@ def tanya_ai_dengan_konteks(prompt_user: str, db: Session) -> str:
         agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
         verbose=True,
         handle_parsing_errors=True,
-        agent_kwargs={
-            "system_message": """
-Kamu adalah chatbot informasi kampus.
-
-Gunakan tool yang tersedia untuk menjawab pertanyaan.
-Jangan mengarang data.
-Jika data tidak ditemukan, jawab:
-'Informasi tersebut belum tersedia di database kampus.'
-"""
-        }
     )
 
     try:
-        hasil = agent.invoke({
-            "input": prompt_user
-        })
+        hasil = agent.invoke(prompt_user)
 
-        return hasil["output"]
+        if isinstance(hasil, dict):
+            return hasil.get("output", str(hasil))
+
+        return str(hasil)
 
     except Exception as e:
         return f"Kesalahan AI: {e}"
