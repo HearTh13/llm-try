@@ -79,7 +79,6 @@ def tanya_ai_dengan_konteks(prompt_user: str, db: Session) -> str:
         - Jika user menanyakan masjid, gunakan data dengan kategori "ibadah".
         - Jika user menanyakan parkir, gunakan data dengan kategori "parkir".
         - Jika user menanyakan lokasi suatu tempat, jawab nama tempat dan alamatnya.
-        - Jika user menanyakan jokowi, jawab "Jokowi adalah Presiden Indonesia, tetapi informasi tentang beliau tidak tersedia di database kampus."
         - Jangan menyebut "lihat bagian GEDUNG DAN LOKASI".
         - Jangan membuat informasi yang tidak ada.
         - Jika informasi tidak ditemukan atau belum tersedia, jawab:
@@ -95,7 +94,7 @@ def tanya_ai_dengan_konteks(prompt_user: str, db: Session) -> str:
         """
 
     payload = {
-        "model": "llama3.2",
+        "model": "gemma:2b",
         "prompt": full_prompt,
         "stream": False
     }
@@ -104,7 +103,7 @@ def tanya_ai_dengan_konteks(prompt_user: str, db: Session) -> str:
         response = requests.post(
             OLLAMA_API_URL,
             json=payload,
-            timeout=60
+            timeout=180
         )
         response.raise_for_status()
 
