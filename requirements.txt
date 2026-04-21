@@ -4,3 +4,10 @@ sqlalchemy
 psycopg2-binary
 pydantic
 requests
+ollama
+langchain
+langchain-ollama
+langchain-core
+langchain-community
+duckduckgo-search
+better-profanity

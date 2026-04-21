@@ -9,9 +9,20 @@ from app.models.news import News
 # ------------------------------
 from app.api import chat_routes, product_routes, faculty_routes, study_program_routes, news_routes, building_routes
 
+from fastapi.middleware.cors import CORSMiddleware
+
 database.Base.metadata.create_all(bind=database.engine)
 
 app = FastAPI(title="Ecommerce & AI - Project 1 & 2")
+
+# Enable CORS for frontend integration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(chat_routes.router, prefix="/chat", tags=["AI Chat"])
 app.include_router(product_routes.router, prefix="/products", tags=["Ecommerce"])

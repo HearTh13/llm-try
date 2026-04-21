@@ -13,7 +13,6 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    # TAMBAHKAN BLOK INI:
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d llm_chat_db"]
       interval: 5s
@@ -32,6 +31,21 @@ services:
     restart: on-failure
     environment:
       - DATABASE_URL=postgresql://postgres:root@db:5432/llm_chat_db
+
+  # Servis Frontend (React - Mode Dev)
+  frontend:
+    build: ./frontend
+    container_name: react_frontend
+    # Gunakan command npm run dev untuk HMR
+    command: npm run dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app         # Map kode lokal ke dalam Docker
+      - /app/node_modules       # Pastikan node_modules di dalam Docker tidak tertindih oleh host
+    depends_on:
+      - backend
+    restart: on-failure
 
 volumes:
   postgres_data:
