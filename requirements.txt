@@ -3,7 +3,3 @@ uvicorn
 sqlalchemy
 psycopg2-binary
 pydantic
-requests
-langchain 
-langchain-community 
-langchain-ollama

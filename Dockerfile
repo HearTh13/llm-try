@@ -9,7 +9,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy semua kode dari folder app lokal ke dalam container
-COPY ./app ./app
+COPY . .
 
 # Jalankan perintah untuk menyalakan server
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
