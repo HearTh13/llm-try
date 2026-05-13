@@ -7,10 +7,12 @@ from sqlalchemy.orm import Session
 
 router = APIRouter()
 
-data_mahasiswa = []
 
 @router.post("/mahasiswa")
-def insert_mahasiswa(request: MahasiswaRequest, db: Session = Depends(get_db)):
+def insert_mahasiswa(
+    request: MahasiswaRequest,
+    db: Session = Depends(get_db)
+):
 
     mahasiswa_baru = {
         "nim": request.nim,
@@ -19,44 +21,44 @@ def insert_mahasiswa(request: MahasiswaRequest, db: Session = Depends(get_db)):
         "semester": request.semester
     }
 
-    data_mahasiswa.append(mahasiswa_baru)
-    
-    create_mahasiswa = MahasiswaService.create_mahasiswa(
+    result = MahasiswaService.create_mahasiswa(
         db=db,
         data=mahasiswa_baru
     )
-    
 
-    return {
-        "message": "Data mahasiswa berhasil ditambahkan",
-        "data": mahasiswa_baru
-    }
-    
+    return result
+
+
 @router.get("/mahasiswa")
-def get_all_mahasiswa(db: Session = Depends(get_db)):
+def get_all_mahasiswa(
+    db: Session = Depends(get_db)
+):
 
-    mahasiswa = MahasiswaService.get_all_mahasiswa(db)
+    result = MahasiswaService.get_all_mahasiswa(db)
 
-    return {
-        "message": "Data mahasiswa berhasil diambil",
-        "data": mahasiswa
-    }
-    
+    return result
+
+
 @router.get("/mahasiswa/{mahasiswa_id}")
-def get_mahasiswa_by_id(mahasiswa_id: int, db: Session = Depends(get_db)):
+def get_mahasiswa_by_id(
+    mahasiswa_id: int,
+    db: Session = Depends(get_db)
+):
 
-    mahasiswa = MahasiswaService.get_mahasiswa_by_id(
+    result = MahasiswaService.get_mahasiswa_by_id(
         db=db,
         mahasiswa_id=mahasiswa_id
     )
 
-    return {
-        "message": "Data mahasiswa berhasil diambil",
-        "data": mahasiswa
-    }
-    
+    return result
+
+
 @router.put("/mahasiswa/{mahasiswa_id}")
-def update_mahasiswa(mahasiswa_id: int, request: MahasiswaRequest, db: Session = Depends(get_db)):
+def update_mahasiswa(
+    mahasiswa_id: int,
+    request: MahasiswaRequest,
+    db: Session = Depends(get_db)
+):
 
     mahasiswa_update = {
         "nim": request.nim,
@@ -65,26 +67,24 @@ def update_mahasiswa(mahasiswa_id: int, request: MahasiswaRequest, db: Session =
         "semester": request.semester
     }
 
-    update_mahasiswa = MahasiswaService.update_mahasiswa(
+    result = MahasiswaService.update_mahasiswa(
         db=db,
         mahasiswa_id=mahasiswa_id,
         data=mahasiswa_update
     )
 
-    return {
-        "message": "Data mahasiswa berhasil diupdate",
-        "data": update_mahasiswa
-    }
-    
-@router.delete("/mahasiswa/{mahasiswa_id}")
-def delete_mahasiswa(mahasiswa_id: int, db: Session = Depends(get_db)):
+    return result
 
-    delete_mahasiswa = MahasiswaService.delete_mahasiswa(
+
+@router.delete("/mahasiswa/{mahasiswa_id}")
+def delete_mahasiswa(
+    mahasiswa_id: int,
+    db: Session = Depends(get_db)
+):
+
+    result = MahasiswaService.delete_mahasiswa(
         db=db,
         mahasiswa_id=mahasiswa_id
     )
 
-    return {
-        "message": "Data mahasiswa berhasil dihapus",
-        "data": delete_mahasiswa
-    }
+    return result
