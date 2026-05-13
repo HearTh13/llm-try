@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from app.api.mahasiswa_routes import router as mahasiswa_router
 
 app = FastAPI(
     title="FastAPI CRUD API",

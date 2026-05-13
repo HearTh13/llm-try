@@ -13,4 +13,4 @@ class Mahasiswa(Base):
     semester = Column(Integer, nullable=False)
 
     # Relasi ke tabel KRS
-    krs = relationship("KRS", back_populates="mahasiswa")
+    # krs = relationship("KRS", back_populates="mahasiswa")
