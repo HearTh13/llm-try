@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from app.core import database
 from app.models.chat import ChatHistory
 from app.models.product import Product
@@ -11,7 +12,16 @@ from app.api import chat_routes, product_routes, faculty_routes, study_program_r
 
 database.Base.metadata.create_all(bind=database.engine)
 
-app = FastAPI(title="Ecommerce & AI - Project 1 & 2")
+app = FastAPI(title="Ecommerce & AI - Project 1 & 2", redirect_slashes=False)
+
+# Konfigurasi CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Mengizinkan semua domain (termasuk localhost:5173)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(chat_routes.router, prefix="/chat", tags=["AI Chat"])
 app.include_router(product_routes.router, prefix="/products", tags=["Ecommerce"])
