@@ -32,7 +32,12 @@ services:
     ports:
       - "8001:8001"
     environment:
+      # Pilihan provider: 'gemini' atau 'openai'
+      LLM_PROVIDER: "gemini"
+      # Nama model LMM fleksibel sesuai dengan provider yang digunakan
+      LLM_MODEL: "gemini-2.5-flash"
       GEMINI_API_KEY: "AIzaSyCayRXUib939hMplPTncMvS2bBp_RPVtGI"
+      OPENAI_API_KEY: "GANTI_DENGAN_API_KEY_OPENAI_KAMU_DISINI"
     depends_on:
       - db
 
