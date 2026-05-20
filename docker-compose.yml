@@ -32,7 +32,7 @@ services:
     ports:
       - "8001:8001"
     environment:
-      GEMINI_API_KEY: "AIzaSyCayRXUib939hMplPTncMvS2bBp_RPVtGI"
+      GEMINI_API_KEY: "MASUKKAN_API_KEY_BARU_KAMU_DISINI"
     depends_on:
       - db
 
