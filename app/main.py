@@ -1,19 +1,16 @@
 from fastapi import FastAPI
-from app.api.mahasiswa_routes import router as mahasiswa_router
-from app.database import Base, engine
-from app.models.mahasiswa import Mahasiswa
+from app.api.chat_routes import router as chat_router
 
 app = FastAPI(
-    title="FastAPI CRUD API",
-    description="API sederhana untuk mengelola data mahasiswa, mata kuliah, KRS, dan nilai",
+    title="LLM Gemini Service API",
+    description="Microservice khusus untuk menangani interaksi dengan Google Gemini LLM",
     version="1.0.0"
 )
 
-app.include_router(mahasiswa_router)
-Base.metadata.create_all(bind=engine)
+app.include_router(chat_router, prefix="/api/v1", tags=["LLM Gemini"])
 
 @app.get("/")
 def root():
     return {
-        "message": "FastAPI CRUD API berhasil dijalankan"
+        "message": "LLM Service API berjalan normal di Modul 2"
     }
