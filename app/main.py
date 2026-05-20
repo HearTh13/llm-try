@@ -9,7 +9,8 @@ app = FastAPI(
     version="1.0.0"
 )
 
-app.include_router(mahasiswa_router)
+# Menyertakan prefix /api/v1 agar endpoint tetap rapi saat modul bertambah
+app.include_router(mahasiswa_router, prefix="/api/v1", tags=["Mahasiswa"])
 Base.metadata.create_all(bind=engine)
 
 @app.get("/")
