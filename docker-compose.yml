@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 version: "3.8"
 
 services:
@@ -5,11 +6,20 @@ services:
   db:
     image: postgres:15
     container_name: postgres_db_main
+=======
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    platform: linux/amd64
+    restart: always
+>>>>>>> ondev-ui
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: root
       POSTGRES_DB: llm_chat_db
     ports:
+<<<<<<< HEAD
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
@@ -20,6 +30,21 @@ services:
     container_name: fastapi_modul1
     ports:
       - "8000:8000"
+=======
+      - "5435:5432"  # Changed to 5435 to avoid ANY conflict with fire_bender
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: .
+    container_name: fastapi_app
+    platform: linux/amd64
+    restart: always
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+>>>>>>> ondev-ui
     environment:
       DATABASE_URL: postgresql://postgres:root@db:5432/llm_chat_db
     depends_on:
