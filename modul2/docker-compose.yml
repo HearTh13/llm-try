@@ -1,0 +1,50 @@
+version: "3.8"
+
+services:
+  # 1. Database PostgreSQL (Menggunakan konfigurasi yang sudah terbukti running)
+  db:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    platform: linux/amd64
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: llm_chat_db
+    ports:
+      - "5435:5432"  # Diekspos ke port 5435 di host agar tidak conflict
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # 2. Modul 1 (CRUD & Database)
+  modul1_api:
+    build: ./modul1
+    container_name: fastapi_modul1
+    platform: linux/amd64
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:root@db:5432/llm_chat_db
+    depends_on:
+      - db
+
+  # 3. Modul 2 (LLM / Gemini)
+  modul2_llm:
+    build: ./modul2
+    container_name: fastapi_modul2
+    platform: linux/amd64
+    restart: always
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql://postgres:root@db:5432/llm_chat_db
+      - LLM_PROVIDER=gemini
+      - LLM_MODEL=gemini-2.5-flash
+      - GEMINI_API_KEY=AIzaSyCayRXUib939hMplPTncMvS2bBp_RPVtGI
+      - OPENAI_API_KEY=GANTI_DENGAN_API_KEY_OPENAI_KAMU_DISINI
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
