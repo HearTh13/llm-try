@@ -36,7 +36,7 @@ services:
       LLM_PROVIDER: "gemini"
       # Nama model LMM fleksibel sesuai dengan provider yang digunakan
       LLM_MODEL: "gemini-2.5-flash"
-      GEMINI_API_KEY: "AIzaSyCayRXUib939hMplPTncMvS2bBp_RPVtGI"
+      GEMINI_API_KEY: "GANTI_DENGAN_API_KEY_GEMINI_KAMU_DISINI"
       OPENAI_API_KEY: "GANTI_DENGAN_API_KEY_OPENAI_KAMU_DISINI"
     depends_on:
       - db
