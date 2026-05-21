@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 
 const MODEL_NAME = "Campus-AI-Core";
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = "http://localhost:8002/api/v1";
 
 const schemaMap = {
   faculties: [
@@ -148,7 +148,7 @@ const App = () => {
       addAnnouncement(`Error Koneksi: ${error.message}`, 'error');
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        text: `Error: ${error.message}. Pastikan server FastAPI Smart Campus berjalan di localhost:8000.` 
+        text: `Error: ${error.message}. Pastikan server FastAPI Modul 3 berjalan di localhost:8002.` 
       }]);
     } finally {
       setIsTyping(false);

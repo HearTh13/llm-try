@@ -1,26 +1,18 @@
-<<<<<<< HEAD
 version: "3.8"
 
 services:
   # 1. Database PostgreSQL
   db:
-    image: postgres:15
-    container_name: postgres_db_main
-=======
-services:
-  db:
     image: postgres:15-alpine
-    container_name: postgres_db
+    container_name: postgres_db_main
     platform: linux/amd64
     restart: always
->>>>>>> ondev-ui
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: root
       POSTGRES_DB: llm_chat_db
     ports:
-<<<<<<< HEAD
-      - "5432:5432"
+      - "5435:5432"  # Changed to 5435 to avoid conflict
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -30,21 +22,6 @@ services:
     container_name: fastapi_modul1
     ports:
       - "8000:8000"
-=======
-      - "5435:5432"  # Changed to 5435 to avoid ANY conflict with fire_bender
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  backend:
-    build: .
-    container_name: fastapi_app
-    platform: linux/amd64
-    restart: always
-    ports:
-      - "8000:8000"
-    depends_on:
-      - db
->>>>>>> ondev-ui
     environment:
       DATABASE_URL: postgresql://postgres:root@db:5432/llm_chat_db
     depends_on:
@@ -57,12 +34,24 @@ services:
     ports:
       - "8001:8001"
     environment:
-      # Pilihan provider: 'gemini' atau 'openai'
       LLM_PROVIDER: "gemini"
-      # Nama model LMM fleksibel sesuai dengan provider yang digunakan
       LLM_MODEL: "gemini-2.5-flash"
       GEMINI_API_KEY: "AIzaSyCayRXUib939hMplPTncMvS2bBp_RPVtGI"
       OPENAI_API_KEY: "GANTI_DENGAN_API_KEY_OPENAI_KAMU_DISINI"
+    depends_on:
+      - db
+
+  # 4. Modul 3 (AI Assistant)
+  modul3_assistant:
+    build: ./modul3
+    container_name: fastapi_modul3
+    ports:
+      - "8002:8002"
+    environment:
+      DATABASE_URL: postgresql://postgres:root@db:5432/llm_chat_db
+      LLM_PROVIDER: "gemini"
+      LLM_MODEL: "gemini-2.5-flash"
+      GEMINI_API_KEY: "${GEMINI_API_KEY}"
     depends_on:
       - db
 
