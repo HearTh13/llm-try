@@ -12,7 +12,7 @@ services:
       POSTGRES_PASSWORD: root
       POSTGRES_DB: llm_chat_db
     ports:
-      - "5435:5432"  # Changed to 5435 to avoid conflict
+      - "5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -20,10 +20,12 @@ services:
   modul1_api:
     build: ./modul1
     container_name: fastapi_modul1
+    platform: linux/amd64
+    restart: always
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://postgres:root@db:5432/llm_chat_db
+      - DATABASE_URL=postgresql://postgres:root@db:5432/llm_chat_db
     depends_on:
       - db
 
@@ -31,12 +33,14 @@ services:
   modul2_llm:
     build: ./modul2
     container_name: fastapi_modul2
+    platform: linux/amd64
+    restart: always
     ports:
       - "8001:8001"
     environment:
       LLM_PROVIDER: "gemini"
       LLM_MODEL: "gemini-2.5-flash"
-      GEMINI_API_KEY: "AIzaSyCayRXUib939hMplPTncMvS2bBp_RPVtGI"
+      GEMINI_API_KEY: "${GEMINI_API_KEY}"
       OPENAI_API_KEY: "GANTI_DENGAN_API_KEY_OPENAI_KAMU_DISINI"
     depends_on:
       - db
