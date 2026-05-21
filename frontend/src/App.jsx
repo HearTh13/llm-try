@@ -125,12 +125,11 @@ const App = () => {
         text: m.text
       }));
 
-      const response = await fetch(`${API_BASE_URL}/chat/`, {
+      const response = await fetch(`${API_BASE_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: userQuery,
-          history: history
+          prompt: userQuery
         })
       });
 

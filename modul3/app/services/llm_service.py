@@ -12,7 +12,7 @@ gemini_client = None
 
 if LLM_PROVIDER == "gemini":
     if GEMINI_API_KEY and GEMINI_API_KEY != "GANTI_DENGAN_API_KEY_GEMINI_KAMU_DISINI":
-        gemini_client = genai.Client(api_key=GEMINI_API_KEY, http_options={'api_version': 'v1'})
+        gemini_client = genai.Client(api_key=GEMINI_API_KEY, http_options={'api_version': 'v1beta'})
 
 # --- TOOLS FUNCTIONS ---
 def get_mahasiswa_by_nim(nim: str) -> str:
