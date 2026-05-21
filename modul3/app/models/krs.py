@@ -8,7 +8,7 @@ class KRS(Base):
     id = Column(Integer, primary_key=True, index=True)
     mahasiswa_id = Column(Integer, ForeignKey("mahasiswa.id"), nullable=False)
     mata_kuliah_id = Column(Integer, ForeignKey("mata_kuliah.id"), nullable=False)
-    semester = Column(Integer, nullable=False)
+    semester_diambil = Column(Integer, nullable=False)
     nilai_huruf = Column(String(2), nullable=True) # A, B, C, D, E
 
     mahasiswa = relationship("Mahasiswa", back_populates="krs")
