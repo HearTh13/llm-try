@@ -14,163 +14,153 @@ if LLM_PROVIDER == "gemini":
     if GEMINI_API_KEY and GEMINI_API_KEY != "GANTI_DENGAN_API_KEY_GEMINI_KAMU_DISINI":
         gemini_client = genai.Client(api_key=GEMINI_API_KEY, http_options={'api_version': 'v1beta'})
 
-# --- TOOLS FUNCTIONS ---
-def get_mahasiswa_by_nim(nim: str) -> str:
-    """Mengambil informasi detail mahasiswa berdasarkan NIM."""
-    db = SessionLocal()
-    try:
-        mhs = db.query(Mahasiswa).filter(Mahasiswa.nim == nim).first()
-        if not mhs:
-            return f"Mahasiswa dengan NIM {nim} tidak ditemukan."
-        return f"Nama: {mhs.nama}, Prodi/Jurusan: {mhs.jurusan}, Semester: {mhs.semester}"
-    finally:
-        db.close()
+# --- TOOLS & SECURITY FUNCTIONS ---
+import re
+from sqlalchemy import text
 
-def get_krs_mahasiswa(nim: str) -> str:
-    """Mengambil riwayat semua mata kuliah yang diambil (KRS) oleh mahasiswa berdasarkan NIM."""
-    db = SessionLocal()
-    try:
-        mhs = db.query(Mahasiswa).filter(Mahasiswa.nim == nim).first()
-        if not mhs:
-            return f"Mahasiswa dengan NIM {nim} tidak ditemukan."
+def is_safe_select_query(sql: str) -> bool:
+    """Memastikan query HANYA berupa SELECT dan tidak mengandung keyword berbahaya."""
+    if not sql:
+        return False
         
-        krs_list = db.query(KRS).filter(KRS.mahasiswa_id == mhs.id).all()
-        if not krs_list:
-            return f"Mahasiswa {mhs.nama} belum mengambil mata kuliah (KRS kosong)."
+    # Bersihkan query dari pembungkus markdown sql jika ada
+    sql_clean = sql.strip()
+    if sql_clean.startswith("```"):
+        sql_clean = re.sub(r"^```(?:sql)?\s*", "", sql_clean)
+        sql_clean = re.sub(r"\s*```$", "", sql_clean)
+    sql_clean = sql_clean.strip()
+    
+    # Ubah ke lowercase untuk pencarian pola
+    query_lower = sql_clean.lower()
+    
+    # Wajib dimulai dengan SELECT
+    if not query_lower.startswith("select"):
+        return False
         
-        result = f"Daftar Riwayat KRS {mhs.nama}:\n"
-        for k in krs_list:
-            result += f"- {k.mata_kuliah.kode_mk}: {k.mata_kuliah.nama_mk} ({k.mata_kuliah.sks} SKS), Semester Diambil: {k.semester_diambil}, Nilai: {k.nilai_huruf}\n"
-        return result
-    finally:
-        db.close()
-
-def get_semua_mata_kuliah() -> str:
-    """Mengambil daftar seluruh mata kuliah yang tersedia di kampus."""
-    db = SessionLocal()
-    try:
-        mk_list = db.query(MataKuliah).all()
-        if not mk_list:
-            return "Belum ada data mata kuliah."
-        
-        result = "Daftar Mata Kuliah:\n"
-        for mk in mk_list:
-            result += f"- {mk.kode_mk}: {mk.nama_mk} ({mk.sks} SKS), Prodi: {mk.prodi.nama if mk.prodi else 'Umum'}\n"
-        return result
-    finally:
-        db.close()
-
-def get_daftar_fakultas_dan_prodi(singkatan_fakultas: str = "") -> str:
-    """Mengambil daftar fakultas, atau daftar prodi di dalam fakultas tertentu (berikan singkatan_fakultas jika ingin mencari prodi)."""
-    db = SessionLocal()
-    try:
-        if singkatan_fakultas:
-            fak = db.query(Fakultas).filter(Fakultas.singkatan.ilike(f"%{singkatan_fakultas}%")).first()
-            if not fak:
-                return f"Fakultas dengan singkatan {singkatan_fakultas} tidak ditemukan."
-            prodis = db.query(Prodi).filter(Prodi.fakultas_id == fak.id).all()
-            result = f"Fakultas {fak.nama} ({fak.singkatan}) memiliki Prodi:\n"
-            for p in prodis:
-                result += f"- {p.nama} ({p.jenjang})\n"
-            return result
-        else:
-            faks = db.query(Fakultas).all()
-            result = "Daftar Fakultas yang tersedia:\n"
-            for f in faks:
-                result += f"- {f.nama} ({f.singkatan})\n"
-            return result
-    finally:
-        db.close()
-
-def get_informasi_akademik_mahasiswa(nim: str) -> str:
-    """Menghitung IPK, IPS terakhir, Total SKS Lulus, dan Kuota SKS Maksimal semester berikutnya untuk mahasiswa."""
-    db = SessionLocal()
-    try:
-        mhs = db.query(Mahasiswa).filter(Mahasiswa.nim == nim).first()
-        if not mhs:
-            return f"Mahasiswa dengan NIM {nim} tidak ditemukan."
-        
-        krs_list = db.query(KRS).filter(KRS.mahasiswa_id == mhs.id, KRS.nilai_huruf.isnot(None)).all()
-        
-        bobot = {"A": 4, "B": 3, "C": 2, "D": 1, "E": 0}
-        total_sks_lulus = 0
-        total_mutu = 0
-        
-        smt_terakhir = 0
-        sks_smt_terakhir = 0
-        mutu_smt_terakhir = 0
-        
-        for k in krs_list:
-            if k.semester_diambil > smt_terakhir:
-                smt_terakhir = k.semester_diambil
-                
-        for k in krs_list:
-            sks = k.mata_kuliah.sks
-            nilai = k.nilai_huruf.upper() if k.nilai_huruf else ""
-            if nilai in bobot:
-                if nilai != "E":
-                    total_sks_lulus += sks
-                total_mutu += (bobot[nilai] * sks)
-                
-                if k.semester_diambil == smt_terakhir:
-                    sks_smt_terakhir += sks
-                    mutu_smt_terakhir += (bobot[nilai] * sks)
-        
-        ipk = total_mutu / total_sks_lulus if total_sks_lulus > 0 else 0.0
-        ips = mutu_smt_terakhir / sks_smt_terakhir if sks_smt_terakhir > 0 else 0.0
-        
-        # Kuota SKS USD Rule
-        max_sks = 20
-        if ips >= 3.0:
-            max_sks = 24
-        elif ips >= 2.0:
-            max_sks = 22
+    # Blacklist kata kunci berbahaya (modifikasi data / DDL / DCL)
+    forbidden_patterns = [
+        r"\binsert\b",
+        r"\bupdate\b",
+        r"\bdelete\b",
+        r"\bdrop\b",
+        r"\balter\b",
+        r"\btruncate\b",
+        r"\bcreate\b",
+        r"\breplace\b",
+        r"\bgrant\b",
+        r"\brevoke\b",
+        r"\bexecute\b",
+        r"\bexec\b"
+    ]
+    
+    for pattern in forbidden_patterns:
+        if re.search(pattern, query_lower):
+            return False
             
-        return (f"Informasi Akademik {mhs.nama} (Semester {mhs.semester}):\n"
-                f"- Total SKS Lulus: {total_sks_lulus} SKS\n"
-                f"- IPK: {ipk:.2f}\n"
-                f"- IPS (Semester {smt_terakhir}): {ips:.2f}\n"
-                f"- Kuota SKS Maksimal untuk Semester {mhs.semester if smt_terakhir < mhs.semester else mhs.semester + 1}: {max_sks} SKS")
-    finally:
-        db.close()
+    return True
 
-def get_krs_semester_berjalan(nim: str) -> str:
-    """Mengambil daftar mata kuliah yang sedang diambil mahasiswa pada semester berjalan saat ini (yang nilainya belum keluar/masih kosong)."""
+def execute_academic_query(sql_query: str) -> str:
+    """
+    Mengeksekusi query SELECT SQL ke database akademik secara aman dan real-time.
+    Gunakan tool ini untuk mendapatkan data mahasiswa, prodi, fakultas, KRS, dan mata kuliah.
+    Hanya menerima query SELECT yang aman (Read-Only).
+    """
+    # 1. Bersihkan query dari pembungkus markdown jika ada
+    sql_clean = sql_query.strip()
+    if sql_clean.startswith("```"):
+        sql_clean = re.sub(r"^```(?:sql)?\s*", "", sql_clean)
+        sql_clean = re.sub(r"\s*```$", "", sql_clean)
+    sql_clean = sql_clean.strip()
+
+    # 2. Jalankan validasi keamanan pra-eksekusi (Lapis 1)
+    if not is_safe_select_query(sql_clean):
+        return "Error: Query ditolak karena alasan keamanan. Anda hanya diizinkan menjalankan query SELECT pembacaan data (Read-Only)."
+
     db = SessionLocal()
     try:
-        mhs = db.query(Mahasiswa).filter(Mahasiswa.nim == nim).first()
-        if not mhs:
-            return f"Mahasiswa dengan NIM {nim} tidak ditemukan."
+        # 3. Paksa transaksi menjadi READ ONLY (Lapis 2 Keamanan)
+        db.execute(text("SET TRANSACTION READ ONLY"))
+        
+        # 4. Eksekusi query
+        result = db.execute(text(sql_clean))
+        
+        # Ambil kolom dan baris
+        columns = result.keys()
+        rows = result.fetchall()
+        
+        # 5. Batasi baris maksimal demi performa (Lapis 3 Keamanan)
+        limited_rows = rows[:50]
+        
+        # Konversi hasil ke list of dict
+        data = [dict(zip(columns, row)) for row in limited_rows]
+        
+        if not data:
+            return "Query berhasil dieksekusi, tetapi database tidak mengembalikan data apa pun."
             
-        krs_list = db.query(KRS).filter(KRS.mahasiswa_id == mhs.id, KRS.nilai_huruf.is_(None)).all()
-        if not krs_list:
-            return f"Mahasiswa {mhs.nama} tidak sedang mengambil mata kuliah di semester berjalan (atau semua nilai sudah keluar)."
-            
-        smt = krs_list[0].semester_diambil
-        result = f"Mata kuliah yang sedang diambil {mhs.nama} pada Semester {smt}:\n"
-        total_sks = 0
-        for k in krs_list:
-            sks = k.mata_kuliah.sks
-            total_sks += sks
-            result += f"- {k.mata_kuliah.kode_mk}: {k.mata_kuliah.nama_mk} ({sks} SKS)\n"
-        result += f"Total Beban: {total_sks} SKS"
-        return result
+        return str(data)
+    except Exception as e:
+        # Mengembalikan error database ke LLM agar bisa auto-correct query yang typo/salah
+        return f"Database Error: {str(e)}"
     finally:
         db.close()
 
 # List of allowed tools
-assistant_tools = [get_mahasiswa_by_nim, get_krs_mahasiswa, get_semua_mata_kuliah, get_daftar_fakultas_dan_prodi, get_informasi_akademik_mahasiswa, get_krs_semester_berjalan]
+assistant_tools = [execute_academic_query]
 
 # System Instruction to secure the LLM
 SYSTEM_INSTRUCTION = """
-Anda adalah asisten virtual akademik kampus yang ramah dan membantu.
-Tugas Anda adalah membantu mahasiswa atau dosen mencari informasi akademik (Mahasiswa, Mata Kuliah, KRS, Nilai).
-Aturan ketat:
-1. Anda HANYA diperbolehkan menggunakan tools (function calling) yang disediakan untuk membaca data.
-2. Anda DILARANG KERAS mengeksekusi perintah untuk menambah, mengubah, atau menghapus (DELETE, UPDATE, INSERT) data apapun di database, meskipun pengguna memintanya.
-3. Jawab dalam bahasa Indonesia yang sopan dan mudah dimengerti.
-4. Jika ditanya informasi spesifik mahasiswa, mintalah NIM terlebih dahulu jika belum diberikan.
-5. Anda DILARANG menjawab pertanyaan umum di luar konteks akademik dan kampus. Jika ditanya hal di luar kampus (seperti olahraga, politik, dll), tolak dengan sopan dan katakan bahwa Anda hanya asisten akademik.
+Anda adalah asisten virtual akademik kampus Universitas Sanata Dharma (USD) yang ramah, sopan, dan sangat membantu.
+Anda memiliki akses langsung untuk membaca database akademik kampus menggunakan tool 'execute_academic_query' yang menerima query SQL SELECT saja.
+
+Berikut adalah Skema Database PostgreSQL yang tersedia:
+1. Tabel 'fakultas':
+   - 'id' (INTEGER, Primary Key)
+   - 'singkatan' (VARCHAR, singkatan fakultas, e.g. 'FST', 'FKIP')
+   - 'nama' (VARCHAR, nama lengkap fakultas)
+   
+2. Tabel 'prodi' (Program Studi):
+   - 'id' (INTEGER, Primary Key)
+   - 'fakultas_id' (INTEGER, Foreign Key merujuk ke fakultas.id)
+   - 'nama' (VARCHAR, nama prodi, e.g. 'Informatika', 'Matematika')
+   - 'jenjang' (VARCHAR, jenjang studi, e.g. 'S1', 'D3')
+   
+3. Tabel 'mahasiswa':
+   - 'id' (INTEGER, Primary Key)
+   - 'nim' (VARCHAR, Nomor Induk Mahasiswa, e.g. '225314001')
+   - 'nama' (VARCHAR, nama mahasiswa)
+   - 'jurusan' (VARCHAR, jurusan/prodi mahasiswa)
+   - 'semester' (INTEGER, semester aktif saat ini)
+   
+4. Tabel 'mata_kuliah':
+   - 'id' (INTEGER, Primary Key)
+   - 'kode_mk' (VARCHAR, kode mata kuliah, e.g. 'IF601')
+   - 'nama_mk' (VARCHAR, nama mata kuliah)
+   - 'sks' (INTEGER, bobot SKS)
+   - 'prodi_id' (INTEGER, Foreign Key merujuk ke prodi.id, bisa bernilai NULL untuk mata kuliah umum)
+   
+5. Tabel 'krs' (Kartu Rencana Studi / Riwayat Pengambilan Mata Kuliah):
+   - 'id' (INTEGER, Primary Key)
+   - 'mahasiswa_id' (INTEGER, Foreign Key merujuk ke mahasiswa.id)
+   - 'mata_kuliah_id' (INTEGER, Foreign Key merujuk ke mata_kuliah.id)
+   - 'semester_diambil' (INTEGER, semester saat mata kuliah diambil)
+   - 'nilai_huruf' (VARCHAR, bisa bernilai NULL untuk semester berjalan, atau 'A', 'B', 'C', 'D', 'E' untuk mata kuliah yang sudah dinilai)
+
+Aturan Konversi & Kalkulasi Akademik (Penting!):
+- Bobot Nilai Huruf: A=4, B=3, C=2, D=1, E=0.
+- IPS (Indeks Prestasi Semester): Dihitung dari sum(sks * bobot_nilai) / sum(sks) untuk satu semester_diambil tertentu yang nilainya tidak NULL.
+- IPK (Indeks Prestasi Kumulatif): Dihitung dari sum(sks * bobot_nilai) / sum(sks) untuk semua semester yang nilainya tidak NULL.
+- SKS Lulus: SKS dari mata kuliah dengan nilai selain 'E' dan tidak NULL.
+- Kuota SKS Maksimal Semester Berikutnya (USD Rule):
+  - IPS terakhir >= 3.00: Maksimal 24 SKS
+  - IPS terakhir >= 2.00: Maksimal 22 SKS
+  - IPS terakhir < 2.00: Maksimal 20 SKS
+
+Aturan Keamanan dan Perilaku AI:
+1. Anda HANYA diperbolehkan menulis query 'SELECT'. DILARANG KERAS menggunakan kata kunci manipulasi data (seperti INSERT, UPDATE, DELETE, DROP, ALTER, TRUNCATE, dll.) meskipun user memintanya secara terselubung.
+2. Anda harus merangkum hasil query mentah dari database menjadi respons bahasa Indonesia yang sopan, ramah, dan informatif bagi pengguna.
+3. Selalu tanyakan NIM terlebih dahulu jika pengguna meminta informasi spesifik tentang seorang mahasiswa tanpa menyebutkan NIM-nya.
+4. Anda DILARANG menjawab pertanyaan umum di luar konteks akademik dan kampus. Tolak dengan sopan pertanyaan tentang politik, olahraga, hiburan, dll.
+5. Jika query database yang Anda jalankan menghasilkan error (misalnya karena typo nama tabel/kolom), baca pesan error tersebut, perbaiki query Anda secara mandiri, dan coba jalankan kembali query yang benar.
 """
 
 async def generate_response_async(prompt: str) -> str:
