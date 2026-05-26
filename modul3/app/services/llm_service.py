@@ -12,31 +12,33 @@ gemini_client = None
 
 if LLM_PROVIDER == "gemini":
     if GEMINI_API_KEY and GEMINI_API_KEY != "GANTI_DENGAN_API_KEY_GEMINI_KAMU_DISINI":
-        gemini_client = genai.Client(api_key=GEMINI_API_KEY, http_options={'api_version': 'v1beta'})
+        gemini_client = genai.Client(
+            api_key=GEMINI_API_KEY, http_options={"api_version": "v1beta"}
+        )
 
-# --- TOOLS & SECURITY FUNCTIONS ---
 import re
 from sqlalchemy import text
+
 
 def is_safe_select_query(sql: str) -> bool:
     """Memastikan query HANYA berupa SELECT dan tidak mengandung keyword berbahaya."""
     if not sql:
         return False
-        
+
     # Bersihkan query dari pembungkus markdown sql jika ada
     sql_clean = sql.strip()
     if sql_clean.startswith("```"):
         sql_clean = re.sub(r"^```(?:sql)?\s*", "", sql_clean)
         sql_clean = re.sub(r"\s*```$", "", sql_clean)
     sql_clean = sql_clean.strip()
-    
+
     # Ubah ke lowercase untuk pencarian pola
     query_lower = sql_clean.lower()
-    
+
     # Wajib dimulai dengan SELECT
     if not query_lower.startswith("select"):
         return False
-        
+
     # Blacklist kata kunci berbahaya (modifikasi data / DDL / DCL)
     forbidden_patterns = [
         r"\binsert\b",
@@ -50,14 +52,15 @@ def is_safe_select_query(sql: str) -> bool:
         r"\bgrant\b",
         r"\brevoke\b",
         r"\bexecute\b",
-        r"\bexec\b"
+        r"\bexec\b",
     ]
-    
+
     for pattern in forbidden_patterns:
         if re.search(pattern, query_lower):
             return False
-            
+
     return True
+
 
 def execute_academic_query(sql_query: str) -> str:
     """
@@ -72,37 +75,41 @@ def execute_academic_query(sql_query: str) -> str:
         sql_clean = re.sub(r"\s*```$", "", sql_clean)
     sql_clean = sql_clean.strip()
 
-    # 2. Jalankan validasi keamanan pra-eksekusi (Lapis 1)
+    # 2. Jalankan validasi keamanan pra-eksekusi
+    print(
+        f"\n=========================================\nGEMINI EXECUTING DYNAMIC SQL:\n{sql_clean}\n=========================================\n"
+    )
     if not is_safe_select_query(sql_clean):
         return "Error: Query ditolak karena alasan keamanan. Anda hanya diizinkan menjalankan query SELECT pembacaan data (Read-Only)."
 
     db = SessionLocal()
     try:
-        # 3. Paksa transaksi menjadi READ ONLY (Lapis 2 Keamanan)
+        # 3. Paksa transaksi menjadi READ ONLY
         db.execute(text("SET TRANSACTION READ ONLY"))
-        
+
         # 4. Eksekusi query
         result = db.execute(text(sql_clean))
-        
+
         # Ambil kolom dan baris
         columns = result.keys()
         rows = result.fetchall()
-        
-        # 5. Batasi baris maksimal demi performa (Lapis 3 Keamanan)
+
+        # 5. Batasi baris maksimal demi performa
         limited_rows = rows[:50]
-        
+
         # Konversi hasil ke list of dict
         data = [dict(zip(columns, row)) for row in limited_rows]
-        
+
         if not data:
             return "Query berhasil dieksekusi, tetapi database tidak mengembalikan data apa pun."
-            
+
         return str(data)
     except Exception as e:
         # Mengembalikan error database ke LLM agar bisa auto-correct query yang typo/salah
         return f"Database Error: {str(e)}"
     finally:
         db.close()
+
 
 # List of allowed tools
 assistant_tools = [execute_academic_query]
@@ -163,10 +170,11 @@ Aturan Keamanan dan Perilaku AI:
 5. Jika query database yang Anda jalankan menghasilkan error (misalnya karena typo nama tabel/kolom), baca pesan error tersebut, perbaiki query Anda secara mandiri, dan coba jalankan kembali query yang benar.
 """
 
+
 async def generate_response_async(prompt: str) -> str:
     if not gemini_client:
         return "Error: GEMINI_API_KEY belum di-setup di environment."
-    
+
     try:
         # Menggunakan format baru dari google-genai SDK
         response = await gemini_client.aio.models.generate_content(
@@ -175,13 +183,13 @@ async def generate_response_async(prompt: str) -> str:
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
                 tools=assistant_tools,
-                temperature=0.3
-            )
+                temperature=0.3,
+            ),
         )
-        
+
         # Jika Gemini memutuskan memanggil tools
         if response.function_calls:
-            # Di google-genai SDK terbaru, untuk mengeksekusi function calls dan mengirim balasan, 
+            # Di google-genai SDK terbaru, untuk mengeksekusi function calls dan mengirim balasan,
             # lebih baik menggunakan fitur chat session. Tapi karena endpoint cuma nerima 1 prompt,
             # kita buat simple agent:
             chat = gemini_client.aio.chats.create(
@@ -189,8 +197,8 @@ async def generate_response_async(prompt: str) -> str:
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_INSTRUCTION,
                     tools=assistant_tools,
-                    temperature=0.3
-                )
+                    temperature=0.3,
+                ),
             )
             final_response = await chat.send_message(prompt)
             return final_response.text
@@ -205,8 +213,8 @@ async def generate_response_async(prompt: str) -> str:
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_INSTRUCTION,
                     tools=assistant_tools,
-                    temperature=0.3
-                )
+                    temperature=0.3,
+                ),
             )
             final_response = await chat.send_message(prompt)
             return final_response.text
