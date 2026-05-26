@@ -49,6 +49,8 @@ services:
   modul3_assistant:
     build: ./modul3
     container_name: fastapi_modul3
+    platform: linux/amd64
+    restart: always
     ports:
       - "8002:8002"
     environment:

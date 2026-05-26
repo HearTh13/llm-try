@@ -29,32 +29,39 @@ def seed_db():
             db.refresh(p_if)
             
             # Seed Mahasiswa Dummy USD (NIM 225314001, Angkatan 2022, Smt 6)
-            m1 = Mahasiswa(nim="225314001", nama="Budi Santoso", prodi_id=p_if.id, semester=6)
+            m1 = Mahasiswa(nim="225314001", nama="Budi Santoso", jurusan="Informatika", semester=6)
             db.add(m1)
             db.commit()
             db.refresh(m1)
             
-            # Seed MataKuliah Informatika
-            mk1 = MataKuliah(kode_mk="IF111", nama_mk="Algoritma dan Pemrograman", sks=3, prodi_id=p_if.id)
-            mk2 = MataKuliah(kode_mk="IF112", nama_mk="Matematika Diskret", sks=3, prodi_id=p_if.id)
-            mk3 = MataKuliah(kode_mk="IF221", nama_mk="Struktur Data", sks=3, prodi_id=p_if.id)
-            mk4 = MataKuliah(kode_mk="IF331", nama_mk="Basis Data", sks=3, prodi_id=p_if.id)
+            # Seed MataKuliah Informatika & Historical KRS programmatically (Semester 1 to 5)
+            import random
+            random.seed(42) # For reproducible results
+            
+            krs_hist = []
+            for smt in range(1, 6): # Semesters 1 to 5
+                for i in range(7): # 7 classes per semester
+                    sks = 3
+                    mk = MataKuliah(kode_mk=f"IF{smt}0{i+1}", nama_mk=f"Mata Kuliah Dummy {smt}-{i+1}", sks=sks, prodi_id=p_if.id)
+                    db.add(mk)
+                    db.commit()
+                    db.refresh(mk)
+                    
+                    # Random grade weighted towards A and B
+                    grade = random.choice(["A", "A", "B", "B", "B", "C", "C"])
+                    krs = KRS(mahasiswa_id=m1.id, mata_kuliah_id=mk.id, semester_diambil=smt, nilai_huruf=grade)
+                    krs_hist.append(krs)
+                    
+            db.add_all(krs_hist)
+            db.commit()
+            
+            # Seed explicit courses for Semester 6 (Current)
             mk5 = MataKuliah(kode_mk="IF601", nama_mk="Kerja Praktek", sks=2, prodi_id=p_if.id)
             mk6 = MataKuliah(kode_mk="IF602", nama_mk="Pemrograman Web", sks=3, prodi_id=p_if.id)
-            db.add_all([mk1, mk2, mk3, mk4, mk5, mk6])
+            db.add_all([mk5, mk6])
             db.commit()
-            db.refresh(mk1); db.refresh(mk2); db.refresh(mk3); db.refresh(mk4); db.refresh(mk5); db.refresh(mk6)
+            db.refresh(mk5); db.refresh(mk6)
             
-            # Seed Historical KRS
-            krs_hist = [
-                KRS(mahasiswa_id=m1.id, mata_kuliah_id=mk1.id, semester_diambil=1, nilai_huruf="A"),
-                KRS(mahasiswa_id=m1.id, mata_kuliah_id=mk2.id, semester_diambil=1, nilai_huruf="B"),
-                KRS(mahasiswa_id=m1.id, mata_kuliah_id=mk3.id, semester_diambil=2, nilai_huruf="A"),
-                KRS(mahasiswa_id=m1.id, mata_kuliah_id=mk4.id, semester_diambil=5, nilai_huruf="C"),
-            ]
-            db.add_all(krs_hist)
-            
-            # Seed KRS Semester 6 (Current)
             krs_curr = [
                 KRS(mahasiswa_id=m1.id, mata_kuliah_id=mk5.id, semester_diambil=6, nilai_huruf=None),
                 KRS(mahasiswa_id=m1.id, mata_kuliah_id=mk6.id, semester_diambil=6, nilai_huruf=None)

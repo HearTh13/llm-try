@@ -11,5 +11,4 @@ class Prodi(Base):
     jenjang = Column(String(50), nullable=False) # e.g. S1, S2, D3
 
     fakultas = relationship("Fakultas", back_populates="prodi")
-    mahasiswa = relationship("Mahasiswa", back_populates="prodi")
     mata_kuliah = relationship("MataKuliah", back_populates="prodi")

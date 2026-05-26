@@ -22,7 +22,7 @@ def get_mahasiswa_by_nim(nim: str) -> str:
         mhs = db.query(Mahasiswa).filter(Mahasiswa.nim == nim).first()
         if not mhs:
             return f"Mahasiswa dengan NIM {nim} tidak ditemukan."
-        return f"Nama: {mhs.nama}, Prodi: {mhs.prodi.nama}, Semester: {mhs.semester}"
+        return f"Nama: {mhs.nama}, Prodi/Jurusan: {mhs.jurusan}, Semester: {mhs.semester}"
     finally:
         db.close()
 
