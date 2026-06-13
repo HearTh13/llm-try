@@ -27,7 +27,12 @@ import {
   TrendingUp,
   MapPin,
   Sparkles,
-  Info
+  Info,
+  FileText,
+  UploadCloud,
+  LogOut,
+  Lock,
+  UserCircle2
 } from 'lucide-react';
 
 const MODEL_NAME = "Campus-AI-Core";
@@ -40,13 +45,25 @@ const schemaMap = {
     { name: 'nama', type: 'text', label: 'Nama Lengkap', required: true, placeholder: 'Contoh: Ahmad Subardjo' },
     { name: 'jurusan', type: 'text', label: 'Jurusan / Program Studi', required: true, placeholder: 'Contoh: Teknik Informatika' },
     { name: 'semester', type: 'number', label: 'Semester Aktif', required: true, placeholder: 'Contoh: 4' }
+  ],
+  mata_kuliah: [
+    { name: 'kode_mk', type: 'text', label: 'Kode Mata Kuliah', required: true, placeholder: 'Contoh: IF601' },
+    { name: 'nama_mk', type: 'text', label: 'Nama Mata Kuliah', required: true, placeholder: 'Contoh: Pemrograman Web' },
+    { name: 'sks', type: 'number', label: 'Bobot SKS', required: true, placeholder: 'Contoh: 3' },
+    { name: 'prodi_id', type: 'number', label: 'ID Prodi (opsional)', required: false, placeholder: 'Kosongkan jika mata kuliah umum' }
+  ],
+  krs: [
+    { name: 'mahasiswa_id', type: 'number', label: 'ID Mahasiswa', required: true, placeholder: 'Contoh: 1' },
+    { name: 'mata_kuliah_id', type: 'number', label: 'ID Mata Kuliah', required: true, placeholder: 'Contoh: 5' },
+    { name: 'semester_diambil', type: 'number', label: 'Semester Diambil', required: true, placeholder: 'Contoh: 5' },
+    { name: 'nilai_huruf', type: 'text', label: 'Nilai Huruf (A/B/C/D/E)', required: false, placeholder: 'Kosongkan jika belum dinilai' }
   ]
 };
 
 const App = () => {
   const [activeTab, setActiveTab] = useState('admin'); // Default tab set to Admin to showcase the connection
   const [isApiMode, setIsApiMode] = useState(true); // Connected to your real FastAPI backend by default
-  const [apiBaseUrl, setApiBaseUrl] = useState("http://localhost:8002/api/v1"); // Dynamic API URL to prevent 404
+  const [apiBaseUrl, setApiBaseUrl] = useState("http://localhost:8003/api/v1"); // Modul 4 (AI Assistant + RAG)
   const [showApiSettings, setShowApiSettings] = useState(false);
   const scrollRef = useRef(null);
 
@@ -91,8 +108,29 @@ const App = () => {
 
   // Admin section states
   const [adminSubTab, setAdminSubTab] = useState('mahasiswa');
-  const [adminData, setAdminData] = useState({ mahasiswa: [], dosen: [], mata_kuliah: [] });
+  const [adminData, setAdminData] = useState({ mahasiswa: [], dosen: [], mata_kuliah: [], krs: [] });
   const [adminLoading, setAdminLoading] = useState(false);
+
+  // RAG Documents states
+  const [ragDocs, setRagDocs] = useState([]);
+  const [ragLoading, setRagLoading] = useState(false);
+  const [ragFile, setRagFile] = useState(null);
+  const [ragBusy, setRagBusy] = useState(false);
+
+  // Auth states
+  const [authToken, setAuthToken] = useState(() => {
+    try { return localStorage.getItem('token') || ''; } catch { return ''; }
+  });
+  const [currentUser, setCurrentUser] = useState(null); // { role, username, nim, nama }
+  const [authChecking, setAuthChecking] = useState(true);
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [loginError, setLoginError] = useState('');
+  const [loggingIn, setLoggingIn] = useState(false);
+
+  // Data Saya (mahasiswa) states
+  const [mySummary, setMySummary] = useState(null);
+  const [myKrs, setMyKrs] = useState([]);
+  const [myLoading, setMyLoading] = useState(false);
 
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -119,6 +157,169 @@ const App = () => {
     }
   }, [activeTab, adminSubTab, isApiMode, sandboxDb, apiBaseUrl]);
 
+  useEffect(() => {
+    if (activeTab === 'rag') {
+      fetchRagDocs();
+    }
+  }, [activeTab, apiBaseUrl]);
+
+  // Validasi token saat aplikasi dibuka
+  useEffect(() => {
+    const validate = async () => {
+      if (!authToken) { setAuthChecking(false); return; }
+      try {
+        const res = await fetch(`${apiBaseUrl}/auth/me`, { headers: { Authorization: `Bearer ${authToken}` } });
+        if (!res.ok) throw new Error('expired');
+        const u = await res.json();
+        setCurrentUser({ role: u.role, username: u.username, nim: u.nim, nama: null });
+        setActiveTab(u.role === 'admin' ? 'admin' : 'mydata');
+      } catch (_) {
+        try { localStorage.removeItem('token'); } catch (e) {}
+        setAuthToken('');
+        setCurrentUser(null);
+      } finally {
+        setAuthChecking(false);
+      }
+    };
+    validate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'mydata' && currentUser?.role === 'mahasiswa') {
+      fetchMyData();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, currentUser]);
+
+
+  const authHeaders = () => (authToken ? { Authorization: `Bearer ${authToken}` } : {});
+  const jsonHeaders = () => ({ 'Content-Type': 'application/json', ...authHeaders() });
+
+  const handleLogin = async (e) => {
+    if (e) e.preventDefault();
+    setLoggingIn(true);
+    setLoginError('');
+    try {
+      const res = await fetch(`${apiBaseUrl}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(loginForm)
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Login gagal');
+      }
+      const data = await res.json();
+      try { localStorage.setItem('token', data.token); } catch (_) {}
+      setAuthToken(data.token);
+      setCurrentUser({ role: data.role, username: data.username, nim: data.nim, nama: data.nama });
+      setActiveTab(data.role === 'admin' ? 'admin' : 'mydata');
+      setLoginForm({ username: '', password: '' });
+      addToast(`Selamat datang, ${data.nama || data.username}!`, 'success');
+    } catch (err) {
+      setLoginError(err.message);
+    } finally {
+      setLoggingIn(false);
+    }
+  };
+
+  const handleLogout = () => {
+    try { localStorage.removeItem('token'); } catch (_) {}
+    setAuthToken('');
+    setCurrentUser(null);
+    setActiveTab('admin');
+    addToast('Anda telah keluar.', 'info');
+  };
+
+  const fetchMyData = async () => {
+    setMyLoading(true);
+    try {
+      const [sRes, kRes] = await Promise.all([
+        fetch(`${apiBaseUrl}/me/summary`, { headers: authHeaders() }),
+        fetch(`${apiBaseUrl}/me/krs`, { headers: authHeaders() })
+      ]);
+      if (sRes.ok) setMySummary(await sRes.json());
+      if (kRes.ok) {
+        const kData = await kRes.json();
+        setMyKrs(Array.isArray(kData.data) ? kData.data : []);
+      }
+    } catch (e) {
+      addToast(`Gagal memuat data: ${e.message}`, 'error');
+    } finally {
+      setMyLoading(false);
+    }
+  };
+
+  const fetchRagDocs = async () => {
+    setRagLoading(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/rag/documents`, { headers: authHeaders() });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setRagDocs(Array.isArray(data.documents) ? data.documents : []);
+    } catch (e) {
+      addToast(`Gagal memuat daftar dokumen: ${e.message}`, 'error');
+      setRagDocs([]);
+    } finally {
+      setRagLoading(false);
+    }
+  };
+
+  const handleUploadDoc = async () => {
+    if (!ragFile) { addToast('Pilih file .md atau .txt dulu.', 'warning'); return; }
+    setRagBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', ragFile);
+      const res = await fetch(`${apiBaseUrl}/rag/documents`, { method: 'POST', headers: authHeaders(), body: fd });
+      const data = await res.json();
+      if (data.status !== 'ok') throw new Error(data.message || 'Upload gagal');
+      const chunks = data.ingest && data.ingest.total_chunks;
+      addToast(`Dokumen '${data.uploaded}' diupload & diindeks${chunks ? ` (${chunks} chunk total)` : ''}.`, 'success');
+      setRagFile(null);
+      fetchRagDocs();
+    } catch (e) {
+      addToast(`Upload gagal: ${e.message}`, 'error');
+    } finally {
+      setRagBusy(false);
+    }
+  };
+
+  const handleReindex = async () => {
+    setRagBusy(true);
+    try {
+      const res = await fetch(`${apiBaseUrl}/rag/ingest`, { method: 'POST', headers: authHeaders() });
+      const data = await res.json();
+      if (data.status !== 'ok') throw new Error(data.message || 'Re-index gagal');
+      addToast(`Re-index selesai: ${data.total_chunks} chunk.`, 'success');
+      fetchRagDocs();
+    } catch (e) {
+      addToast(`Re-index gagal: ${e.message}`, 'error');
+    } finally {
+      setRagBusy(false);
+    }
+  };
+
+  const handleDeleteDoc = (filename) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Hapus Dokumen',
+      message: `Hapus "${filename}" dari knowledge base? Index RAG akan diperbarui otomatis.`,
+      onConfirm: async () => {
+        setConfirmDialog(prev => ({ ...prev, isOpen: false }));
+        try {
+          const res = await fetch(`${apiBaseUrl}/rag/documents/${encodeURIComponent(filename)}`, { method: 'DELETE', headers: authHeaders() });
+          const data = await res.json();
+          if (data.status !== 'ok') throw new Error(data.message || 'Hapus gagal');
+          addToast(`Dokumen "${filename}" dihapus.`, 'success');
+          fetchRagDocs();
+        } catch (e) {
+          addToast(`Hapus gagal: ${e.message}`, 'error');
+        }
+      }
+    });
+  };
 
   const fetchAdminData = async (endpoint) => {
     setAdminLoading(true);
@@ -131,7 +332,7 @@ const App = () => {
     }
 
     try {
-      const response = await fetch(`${apiBaseUrl}/${endpoint}`);
+      const response = await fetch(`${apiBaseUrl}/${endpoint}`, { headers: authHeaders() });
       if (response.status === 404) {
         throw new Error(`404: Endpoint /${endpoint} tidak ditemukan. Jika Anda belum mengimplementasikannya di FastAPI, gunakan tab 'Mahasiswa' atau alihkan ke mode 'Sandbox'.`);
       }
@@ -242,7 +443,7 @@ const App = () => {
 
       const response = await fetch(url, {
         method: method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: jsonHeaders(),
         body: JSON.stringify(payload)
       });
 
@@ -291,6 +492,7 @@ const App = () => {
         try {
           const response = await fetch(`${apiBaseUrl}/${targetEndpoint}/${itemId}`, {
             method: 'DELETE',
+            headers: authHeaders(),
           });
 
           if (response.status === 404) {
@@ -385,7 +587,7 @@ const App = () => {
     try {
       const response = await fetch(`${apiBaseUrl}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: jsonHeaders(),
         body: JSON.stringify({ prompt: userQuery })
       });
 
@@ -425,8 +627,75 @@ const App = () => {
   };
 
   const adminTabs = [
-    { id: 'mahasiswa', label: 'Mahasiswa (Full CRUD)' }
+    { id: 'mahasiswa', label: 'Mahasiswa (Full CRUD)' },
+    { id: 'mata_kuliah', label: 'Mata Kuliah (Full CRUD)' },
+    { id: 'krs', label: 'KRS / Nilai (Full CRUD)' }
   ];
+
+  // ----- Gate autentikasi -----
+  if (authChecking) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#020617] text-slate-400">
+        <RefreshCw className="animate-spin mr-2" size={18} /> Memuat...
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-[#020617] text-slate-100 p-4 font-sans">
+        <form onSubmit={handleLogin} className="w-full max-w-sm bg-slate-900/70 border border-slate-800 rounded-2xl p-8 shadow-2xl">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl shadow-lg">
+              <GraduationCap size={24} className="text-white" />
+            </div>
+            <div>
+              <h1 className="font-bold text-lg tracking-tight">Smart Campus</h1>
+              <p className="text-xs text-slate-400">Masuk untuk melanjutkan</p>
+            </div>
+          </div>
+
+          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Username / NIM</label>
+          <input
+            value={loginForm.username}
+            onChange={(e) => setLoginForm(f => ({ ...f, username: e.target.value }))}
+            placeholder="admin atau NIM"
+            className="w-full mt-1.5 mb-4 bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm outline-none focus:border-blue-500"
+            autoFocus
+          />
+
+          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Password</label>
+          <div className="relative mt-1.5">
+            <Lock className="absolute left-3 top-3.5 text-slate-600" size={15} />
+            <input
+              type="password"
+              value={loginForm.password}
+              onChange={(e) => setLoginForm(f => ({ ...f, password: e.target.value }))}
+              placeholder="Password"
+              className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 pl-9 text-sm outline-none focus:border-blue-500"
+            />
+          </div>
+
+          {loginError && <p className="text-xs text-red-400 mt-3">{loginError}</p>}
+
+          <button
+            type="submit"
+            disabled={loggingIn}
+            className="w-full mt-5 py-3 rounded-xl text-sm font-bold bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {loggingIn ? <RefreshCw size={16} className="animate-spin" /> : <Lock size={16} />}
+            Masuk
+          </button>
+
+          <div className="mt-5 text-[11px] text-slate-500 border-t border-slate-800 pt-3 leading-relaxed">
+            Akun demo:<br />
+            Admin: <span className="text-slate-300 font-mono">admin / admin123</span><br />
+            Mahasiswa: <span className="text-slate-300 font-mono">225314001 / mahasiswa123</span>
+          </div>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-[#020617] text-slate-100 font-sans overflow-hidden relative selection:bg-blue-500/30 selection:text-blue-200">
@@ -464,12 +733,14 @@ const App = () => {
         {/* Menu Items */}
         <nav className="flex-1 w-full px-3 space-y-2">
           {[
-            { id: 'admin', icon: <LayoutDashboard size={20} />, label: 'Admin Dashboard' },
+            { id: 'admin', icon: <LayoutDashboard size={20} />, label: 'Admin Dashboard', adminOnly: true },
+            { id: 'mydata', icon: <UserCircle2 size={20} />, label: 'Data Saya', studentOnly: true },
             { id: 'chat', icon: <MessageSquare size={20} />, label: 'Campus Assistant' },
-            { id: 'announcements', icon: <Bell size={20} />, label: 'Announcements' },
-            { id: 'services', icon: <Compass size={20} />, label: 'Student Services' },
-            { id: 'library', icon: <Library size={20} />, label: 'Library Resource' },
-          ].map((item) => (
+            { id: 'announcements', icon: <Bell size={20} />, label: 'Announcements', adminOnly: true },
+            { id: 'services', icon: <Compass size={20} />, label: 'Student Services', adminOnly: true },
+            { id: 'library', icon: <Library size={20} />, label: 'Library Resource', adminOnly: true },
+            { id: 'rag', icon: <FileText size={20} />, label: 'RAG Documents', adminOnly: true },
+          ].filter((item) => currentUser.role === 'admin' ? !item.studentOnly : !item.adminOnly).map((item) => (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
@@ -484,6 +755,20 @@ const App = () => {
             </button>
           ))}
         </nav>
+
+        {/* User aktif + Logout */}
+        <div className="px-3 w-full mb-2">
+          <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 flex items-center gap-2">
+            <UserCircle2 size={20} className="text-blue-400 shrink-0" />
+            <div className="hidden md:block flex-1 min-w-0">
+              <p className="text-xs font-bold text-slate-200 truncate">{currentUser.nama || currentUser.username}</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider">{currentUser.role === 'admin' ? 'Sekretariat / Admin' : 'Mahasiswa'}</p>
+            </div>
+            <button onClick={handleLogout} title="Keluar" className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-red-400 transition-colors">
+              <LogOut size={16} />
+            </button>
+          </div>
+        </div>
 
         {/* Database Mode & API Configurator */}
         <div className="px-3 w-full space-y-3">
@@ -555,6 +840,8 @@ const App = () => {
               {activeTab === 'announcements' && 'Campus Information Hub'}
               {activeTab === 'services' && 'Portal Layanan Terpadu'}
               {activeTab === 'library' && 'Digital Library'}
+              {activeTab === 'rag' && 'Knowledge Base (RAG)'}
+              {activeTab === 'mydata' && 'Data Akademik Saya'}
               {activeTab === 'admin' && 'Central Master Administrator'}
             </h2>
             <div className="flex items-center gap-1.5 bg-slate-900/60 px-2.5 py-1 rounded-full border border-slate-800/80">
@@ -929,6 +1216,169 @@ const App = () => {
                     );
                   })}
               </div>
+            </div>
+          )}
+
+          {activeTab === 'rag' && (
+            <div className="h-full p-6 max-w-5xl mx-auto w-full flex flex-col gap-6 overflow-y-auto custom-scrollbar">
+
+              {/* Upload card */}
+              <div className="bg-slate-900/60 border border-slate-850 rounded-2xl p-5">
+                <div className="flex items-center gap-2 mb-1">
+                  <UploadCloud size={18} className="text-blue-400" />
+                  <h3 className="font-bold text-sm text-slate-200">Upload Dokumen Knowledge Base</h3>
+                </div>
+                <p className="text-xs text-slate-500 mb-4">
+                  Format didukung: <code className="text-blue-400">.md</code>, <code className="text-blue-400">.txt</code>, <code className="text-blue-400">.pdf</code>, <code className="text-blue-400">.docx</code>.
+                  PDF harus berbasis teks (bukan hasil scan). Setelah upload, dokumen otomatis di-index ulang.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    type="file"
+                    accept=".md,.txt,.pdf,.docx"
+                    onChange={(e) => setRagFile(e.target.files?.[0] || null)}
+                    className="flex-1 text-xs text-slate-300 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-slate-800 file:text-slate-200 hover:file:bg-slate-700 cursor-pointer"
+                  />
+                  <button
+                    onClick={handleUploadDoc}
+                    disabled={ragBusy || !ragFile}
+                    className="px-5 py-2.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 flex items-center justify-center gap-2 whitespace-nowrap"
+                  >
+                    {ragBusy ? <RefreshCw size={14} className="animate-spin" /> : <UploadCloud size={14} />}
+                    Upload & Index
+                  </button>
+                </div>
+              </div>
+
+              {/* List header */}
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-xs text-slate-300 uppercase tracking-widest">
+                  Dokumen Tersimpan ({ragDocs.length})
+                </h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleReindex}
+                    disabled={ragBusy}
+                    className="px-3 py-2 rounded-lg text-[11px] font-bold bg-slate-900 hover:bg-slate-800 text-slate-200 border border-slate-850 disabled:opacity-50 flex items-center gap-2"
+                  >
+                    <RefreshCw size={13} className={ragBusy ? 'animate-spin' : ''} /> Re-index Semua
+                  </button>
+                  <button
+                    onClick={fetchRagDocs}
+                    disabled={ragLoading}
+                    className="p-2 bg-slate-900 hover:bg-slate-800 rounded-lg text-slate-300 border border-slate-850"
+                    title="Refresh"
+                  >
+                    <RefreshCw size={14} className={ragLoading ? 'animate-spin' : ''} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Document list */}
+              {ragLoading ? (
+                <div className="text-center text-slate-500 text-xs py-10">Memuat dokumen...</div>
+              ) : ragDocs.length === 0 ? (
+                <div className="text-center text-slate-500 text-xs py-10 border border-dashed border-slate-850 rounded-2xl">
+                  Belum ada dokumen. Upload file <code className="text-blue-400">.md</code>/<code className="text-blue-400">.txt</code> di atas.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {ragDocs.map((doc) => (
+                    <div key={doc.filename} className="p-4 bg-slate-900 rounded-xl border border-slate-850 flex items-start gap-3">
+                      <FileText size={22} className="text-blue-400 shrink-0 mt-1" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <h5 className="font-bold text-slate-200 text-sm truncate">{doc.title}</h5>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${doc.indexed ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>
+                            {doc.indexed ? `${doc.chunks} chunk` : 'belum diindeks'}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-500 font-mono mt-0.5">{doc.filename}</p>
+                        <p className="text-xs text-slate-400 mt-2 line-clamp-3">{doc.about}</p>
+                        <button
+                          onClick={() => handleDeleteDoc(doc.filename)}
+                          className="mt-3 px-3 py-1.5 rounded-lg text-[10px] font-bold bg-red-600/80 hover:bg-red-600 text-white flex items-center gap-1.5"
+                        >
+                          <Trash2 size={12} /> Hapus
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'mydata' && (
+            <div className="h-full p-6 max-w-4xl mx-auto w-full flex flex-col gap-6 overflow-y-auto custom-scrollbar">
+              {myLoading ? (
+                <div className="text-center text-slate-500 text-xs py-10">Memuat data...</div>
+              ) : (
+                <>
+                  {/* Ringkasan */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-slate-900/60 border border-slate-850 rounded-2xl p-4 col-span-2">
+                      <p className="text-[10px] uppercase tracking-widest text-slate-500">Nama / NIM</p>
+                      <p className="font-bold text-slate-100 text-sm mt-1">{mySummary?.nama || currentUser.nama || '-'}</p>
+                      <p className="text-xs text-slate-400 font-mono">{mySummary?.nim || currentUser.nim || '-'}</p>
+                    </div>
+                    <div className="bg-slate-900/60 border border-slate-850 rounded-2xl p-4">
+                      <p className="text-[10px] uppercase tracking-widest text-slate-500">IPK</p>
+                      <p className="font-bold text-2xl text-blue-400 mt-1">{mySummary ? mySummary.ipk : '-'}</p>
+                    </div>
+                    <div className="bg-slate-900/60 border border-slate-850 rounded-2xl p-4">
+                      <p className="text-[10px] uppercase tracking-widest text-slate-500">SKS Lulus</p>
+                      <p className="font-bold text-2xl text-emerald-400 mt-1">{mySummary ? mySummary.sks_lulus : '-'}</p>
+                    </div>
+                  </div>
+
+                  {/* Tabel KRS */}
+                  <div className="bg-slate-900/60 border border-slate-850 rounded-2xl overflow-hidden">
+                    <div className="px-5 py-3 border-b border-slate-850 flex items-center justify-between">
+                      <h3 className="font-bold text-xs text-slate-300 uppercase tracking-widest">Riwayat KRS & Nilai</h3>
+                      <button onClick={fetchMyData} className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400" title="Refresh">
+                        <RefreshCw size={14} className={myLoading ? 'animate-spin' : ''} />
+                      </button>
+                    </div>
+                    {myKrs.length === 0 ? (
+                      <div className="text-center text-slate-500 text-xs py-8">Belum ada data KRS.</div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead className="bg-slate-950 text-slate-400">
+                            <tr>
+                              <th className="text-left px-4 py-2 font-semibold">Smt</th>
+                              <th className="text-left px-4 py-2 font-semibold">Kode</th>
+                              <th className="text-left px-4 py-2 font-semibold">Mata Kuliah</th>
+                              <th className="text-center px-4 py-2 font-semibold">SKS</th>
+                              <th className="text-center px-4 py-2 font-semibold">Nilai</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {myKrs.map((r, i) => (
+                              <tr key={i} className="border-t border-slate-850 text-slate-300">
+                                <td className="px-4 py-2">{r.semester_diambil}</td>
+                                <td className="px-4 py-2 font-mono">{r.kode_mk}</td>
+                                <td className="px-4 py-2">{r.nama_mk}</td>
+                                <td className="px-4 py-2 text-center">{r.sks}</td>
+                                <td className="px-4 py-2 text-center">
+                                  <span className={`px-2 py-0.5 rounded-full font-bold ${r.nilai_huruf ? 'bg-slate-800 text-slate-200' : 'bg-amber-500/15 text-amber-400'}`}>
+                                    {r.nilai_huruf || 'berjalan'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 text-center">
+                    Punya pertanyaan akademik? Buka tab <b>Campus Assistant</b> dan tanya langsung, misalnya "Berapa maksimal SKS saya semester depan?"
+                  </p>
+                </>
+              )}
             </div>
           )}
 

@@ -3,7 +3,9 @@ version: "3.8"
 services:
   # 1. Database PostgreSQL
   db:
-    image: postgres:15-alpine
+    # Diganti dari postgres:15-alpine ke pgvector (superset Postgres + extension vector)
+    # untuk mendukung RAG di Modul 4. Tetap kompatibel penuh dengan Modul 1-3.
+    image: pgvector/pgvector:pg15
     container_name: postgres_db_main
     platform: linux/amd64
     restart: always
@@ -58,6 +60,26 @@ services:
       LLM_PROVIDER: "gemini"
       LLM_MODEL: "gemini-2.5-flash"
       GEMINI_API_KEY: "${GEMINI_API_KEY}"
+    depends_on:
+      - db
+
+  # 5. Modul 4 (AI Assistant + RAG - dalam pengembangan)
+  modul4_rag:
+    build: ./modul4
+    container_name: fastapi_modul4
+    platform: linux/amd64
+    restart: always
+    ports:
+      - "8003:8003"
+    environment:
+      DATABASE_URL: postgresql://postgres:root@db:5432/llm_chat_db
+      LLM_PROVIDER: "gemini"
+      LLM_MODEL: "gemini-2.5-flash"
+      GEMINI_API_KEY: "${GEMINI_API_KEY}"
+    volumes:
+      # Bind-mount folder knowledge base agar dokumen yang di-upload lewat API
+      # tersimpan di host dan tidak hilang saat container di-rebuild.
+      - ./modul4/app/data/knowledge_base:/code/app/data/knowledge_base
     depends_on:
       - db
 
