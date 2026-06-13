@@ -1,5 +1,0 @@
-# Konfigurasi LLM API Key
-# Jangan pernah mem-push file ini ke GitHub!
-
-GEMINI_API_KEY="AIzaSyAQKXrVGTxr7KhisPlRIGfovdpXIoVa9Zw"
-OPENAI_API_KEY="GANTI_DENGAN_API_KEY_OPENAI_KAMU_DISINI"
