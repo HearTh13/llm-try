@@ -80,7 +80,7 @@ Atau lewat Swagger: jalankan `POST /api/v1/rag/ingest`. Respon sukses berisi jum
 
 ## Catatan Penting
 
-- Dokumen di `knowledge_base/` adalah **CONTOH/DUMMY**, bukan kebijakan resmi USD. Ganti isinya
+- Dokumen di `knowledge_base/` adalah **CONTOH/DUMMY**. Ganti isinya
   dengan dokumen resmi sebelum dipakai sungguhan.
 - `GEMINI_API_KEY` yang ada di repo sebaiknya **di-regenerate** karena sudah tersebar.
 - Jika menambah dokumen baru, ulangi langkah ingest.
